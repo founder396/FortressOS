@@ -1,0 +1,14 @@
+# FORTRESS Scrapling Stealth Fetcher Daemon
+# ==========================================
+# Requirements for the standalone Python daemon
+# Install with: pip install -r requirements.txt
+#
+# NOTE: scrapling[all] installs Camoufox automatically.
+# On first run, execute: python -m camoufox fetch
+# to download the hardened Firefox binary.
+
+scrapling[all]>=0.3.0
+fastapi>=0.111.0
+uvicorn[standard]>=0.30.0
+python-dotenv>=1.0.0
+pydantic>=2.7.0

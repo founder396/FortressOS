@@ -1,0 +1,346 @@
+openapi: "3.1.0"
+info:
+  title: Fortress Detect API
+  description: |
+    Language-agnostic REST API for DWT watermark detection, extraction, and verification.
+    The detection layer of the Fortress ecosystem — works with any HTTP client.
+    
+    **Open Standard:** Detection is free via the FAIR Protocol SDK.
+    **Closed Settlement:** License resolution and damage collection run on Fortress OPS.
+  version: "1.0.0"
+  license:
+    name: Apache-2.0
+    url: https://www.apache.org/licenses/LICENSE-2.0
+  contact:
+    name: Hagen Schmidt
+    url: https://destill.ai
+    email: hagen@destill.ai
+
+servers:
+  - url: https://fortress.destill.ai/api/v1
+    description: Production (Fortress OPS)
+  - url: http://localhost:3014
+    description: Local dev (WORKER_TYPE=antidote)
+
+security:
+  - ApiKeyAuth: []
+
+paths:
+  /detect/image:
+    post:
+      operationId: detectImageWatermark
+      summary: Detect & extract DWT watermark from an image
+      description: |
+        Submits an image for frequency-domain watermark extraction.
+        Returns the embedded payload (creator_id, sku, timestamp) or a NOT_FOUND verdict.
+        Does NOT expose the Antidote Key — returns a signed verdict only.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: Image file (JPEG, PNG, WebP, TIFF — max 20MB)
+                sensitivity:
+                  type: string
+                  enum: [low, medium, high]
+                  default: medium
+                  description: |
+                    Extraction sensitivity. 'high' catches more watermarks but may
+                    produce false positives on heavily compressed images.
+      responses:
+        "200":
+          description: Detection result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DetectionResult"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+
+  /detect/url:
+    post:
+      operationId: detectUrlWatermark
+      summary: Detect watermark in an image served at a URL
+      description: |
+        Fortress fetches the image from the provided URL and performs extraction.
+        Useful for automated crawler integrations and monitoring pipelines.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [url]
+              properties:
+                url:
+                  type: string
+                  format: uri
+                  example: "https://example.com/stolen-artwork.jpg"
+                sensitivity:
+                  type: string
+                  enum: [low, medium, high]
+                  default: medium
+      responses:
+        "200":
+          description: Detection result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DetectionResult"
+
+  /detect/batch:
+    post:
+      operationId: detectBatch
+      summary: Batch detect up to 50 URLs
+      description: |
+        Enterprise endpoint for monitoring pipelines. Processes up to 50 URLs per request.
+        Responses are returned asynchronously via webhook or polling.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [urls]
+              properties:
+                urls:
+                  type: array
+                  items:
+                    type: string
+                    format: uri
+                  maxItems: 50
+                webhook_url:
+                  type: string
+                  format: uri
+                  description: Optional. If provided, results POST to this URL when complete.
+      responses:
+        "202":
+          description: Batch job accepted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  job_id:
+                    type: string
+                  status_url:
+                    type: string
+                    format: uri
+
+  /detect/batch/{job_id}:
+    get:
+      operationId: getBatchStatus
+      summary: Poll batch job status
+      parameters:
+        - name: job_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Batch status and partial results
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BatchResult"
+
+  /verify/poaw:
+    post:
+      operationId: verifyPoawReceipt
+      summary: Verify a POAW forensic receipt
+      description: |
+        Verifies the cryptographic integrity of a POAW (Proof of Authentic Work) receipt.
+        Returns whether the receipt is valid, the creator identity hash, and the chain position.
+        Used by legal teams to verify court-admissible evidence packages.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [receipt_hash, signature]
+              properties:
+                receipt_hash:
+                  type: string
+                  description: SHA-256 hash of the POAW receipt
+                signature:
+                  type: string
+                  description: ML-DSA signature from the creator
+      responses:
+        "200":
+          description: POAW verification result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PoawVerification"
+
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-Fortress-Key
+      description: |
+        HMAC-signed API key. Format: `{key_id}.{timestamp}.{hmac_signature}`.
+        Timestamp must be within 30 seconds of server time to prevent replay attacks.
+
+  schemas:
+    DetectionResult:
+      type: object
+      properties:
+        detected:
+          type: boolean
+          description: Whether a Fortress DWT watermark was found
+        confidence:
+          type: number
+          format: float
+          minimum: 0
+          maximum: 1
+          description: Extraction confidence score (0.0–1.0)
+        payload:
+          type: object
+          description: Decoded watermark payload (only if detected=true)
+          properties:
+            creator_id_hash:
+              type: string
+              description: SHA-256 hash of the creator identifier (never raw PII)
+            sku:
+              type: string
+              description: Product or content SKU
+            embedded_at:
+              type: string
+              format: date-time
+            quadrant:
+              type: string
+              enum: [Q1_SHIELD, Q2_MONETIZE, Q3_COMMERCE, Q4_LICENSE, Q5_ANTIDOTE]
+              description: Which 5-Quadrant routing state was active at embed time
+            buyer_id_hash:
+              type: string
+              description: For Q3_COMMERCE — the buyer-specific hash embedded at purchase
+        forensic_receipt:
+          type: object
+          description: POAW receipt for legal use
+          properties:
+            receipt_hash:
+              type: string
+            poaw_chain_id:
+              type: string
+            timestamp:
+              type: string
+              format: date-time
+            is_court_admissible:
+              type: boolean
+        psnr_score:
+          type: number
+          description: PSNR of the watermarked vs. original (quality measure, higher=less visible)
+        generation_survival:
+          type: integer
+          description: Number of AI diffusion generations the watermark survived
+        license_info:
+          type: object
+          description: Current PTI registry license state
+          properties:
+            status:
+              type: string
+              enum: [authorized, unauthorized, licensed, unlicensed]
+            resolution_url:
+              type: string
+              format: uri
+              description: URL to resolve licensing via Fortress OPS clearinghouse
+        processing_ms:
+          type: integer
+          description: Server-side processing time in milliseconds
+
+    BatchResult:
+      type: object
+      properties:
+        job_id:
+          type: string
+        status:
+          type: string
+          enum: [pending, processing, complete, failed]
+        progress:
+          type: integer
+          description: Percentage complete
+        results:
+          type: array
+          items:
+            allOf:
+              - type: object
+                properties:
+                  url:
+                    type: string
+                    format: uri
+              - $ref: "#/components/schemas/DetectionResult"
+
+    PoawVerification:
+      type: object
+      properties:
+        valid:
+          type: boolean
+        creator_hash:
+          type: string
+        chain_position:
+          type: integer
+        previous_receipt:
+          type: string
+        tampered:
+          type: boolean
+        
+  responses:
+    BadRequest:
+      description: Invalid request parameters
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+              code:
+                type: string
+    Unauthorized:
+      description: Missing or invalid API key / HMAC signature
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                example: "API key missing or HMAC signature expired"
+    RateLimited:
+      description: Rate limit exceeded
+      headers:
+        X-RateLimit-Limit:
+          schema:
+            type: integer
+        X-RateLimit-Remaining:
+          schema:
+            type: integer
+        X-RateLimit-Reset:
+          schema:
+            type: string
+            format: date-time
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                example: "Rate limit exceeded. Upgrade plan for higher limits."
+              upgrade_url:
+                type: string
+                format: uri
