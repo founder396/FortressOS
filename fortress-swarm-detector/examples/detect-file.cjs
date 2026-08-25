@@ -2,7 +2,7 @@
 /**
  * Example detector (Apache-2.0): detect a Fortress mark in an image file.
  * Usage: node examples/detect-file.cjs <image> [--merchant did:...]
- * Requires ffmpeg on PATH (decode to gray) + @fortress/provenance-sdk installed.
+ * Requires ffmpeg on PATH (decode to gray) + @fortress_os/provenance-sdk installed.
  */
 'use strict';
 const fs = require('fs');

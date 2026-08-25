@@ -10,7 +10,7 @@ bots, and extensions that detect Fortress watermarks and submit findings to the 
 ## Two ways to detect
 1. **Hosted API** (no local engine needed) — use the sibling `fortress-detect` clients (PHP/Python/TS,
    `openapi.yaml` → `/detect/image`, `/detect/url`, `/detect/batch`). Best for most contributors.
-2. **Local engine** (`detector.cjs`) — runs extraction on-device via `@fortress/provenance-sdk`
+2. **Local engine** (`detector.cjs`) — runs extraction on-device via `@fortress_os/provenance-sdk`
    (resilient watermark, validated v1.0). Use when you don't want to send media to the API.
 
 ## The bounty (Swarm Police)
@@ -36,6 +36,6 @@ They do **not** survive full AI re-generation (information-theoretic — that's 
 product, not a defect). Detection confidence drops as a leaked copy gets more degraded. No "uncrackable" claims.
 
 ## Status
-`@fortress/provenance-sdk` (the local engine) publishes from the Fortress org; until then, use the
+`@fortress_os/provenance-sdk` (the local engine) publishes from the Fortress org; until then, use the
 hosted-API path (`fortress-detect`) or request access. The swarm **protocol + report client** here
 work today against the bounty API.
