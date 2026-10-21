@@ -9,6 +9,7 @@ This repository contains reference clients, daemons, and SDKs to integrate with 
 - **fortress-swarm-detector**: The **Swarm Police** layer — a bounty protocol + report client + local-engine detector. Build crawlers/bots that find leaks and earn a finder's reward + 15% of downstream legal recovery. (Apache-2.0)
 - **fortress-scrapling-daemon**: A lightweight Python-based daemon utilizing Scrapling for sovereign data extraction.
 - **fortress-telegram-daemon**: A scanner and monitoring tool for continuous field tracking.
+- **fortress-open-benchmark**: an open, vendor-neutral benchmark harness for image watermarking and provenance tools (energy per operation, robustness per attack, false hits on unmarked files; three axes, never fused). Bring your own tool through a small adapter. Results and method: https://fortress.destill.ai/benchmark/
 
 ## What Fortress detects (v1.0 — honest, reproducible at $0/offline)
 
